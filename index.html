@@ -280,3 +280,106 @@ setInterval(checkReminders,15000);
 </script>
 </body>
 </html>
+
+
+<!-- StudyTrack AI Tutor -->
+<section id="ai-tutor" style="max-width:700px;margin:24px auto;padding:16px;border-radius:16px;background:#f1f5f9;color:#111827;font-family:Arial,sans-serif">
+  <h2>🤖 StudyTrack AI Tutor</h2>
+  <p>Ask doubts in Hindi or English.</p>
+
+  <div id="ai-messages" role="log" aria-live="polite"
+       style="height:300px;overflow-y:auto;background:white;padding:12px;border-radius:12px;margin-bottom:12px">
+    <p><b>AI Tutor:</b> Namaste! Ask me a question about your studies.</p>
+  </div>
+
+  <form id="ai-form" style="display:flex;gap:8px;flex-wrap:wrap">
+    <input id="ai-question" required maxlength="2000"
+      placeholder="Type your question..."
+      style="flex:1;min-width:180px;padding:12px;border:1px solid #aaa;border-radius:10px">
+    <button type="submit" id="ai-send"
+      style="padding:12px 18px;background:#2563eb;color:white;border:0;border-radius:10px">
+      Ask AI
+    </button>
+    <button type="button" id="ai-speak"
+      style="padding:12px;border:0;border-radius:10px">
+      🔊 Read aloud
+    </button>
+  </form>
+  <p id="ai-status" aria-live="polite"></p>
+</section>
+
+<script>
+(() => {
+  const form = document.getElementById("ai-form");
+  const input = document.getElementById("ai-question");
+  const messages = document.getElementById("ai-messages");
+  const status = document.getElementById("ai-status");
+  const send = document.getElementById("ai-send");
+
+  // Replace this with your deployed backend URL in Step 2.
+  const API_URL = "PASTE_YOUR_BACKEND_URL_HERE";
+
+  function addMessage(who, text) {
+    const p = document.createElement("p");
+    const b = document.createElement("b");
+    b.textContent = who + ": ";
+    p.appendChild(b);
+    p.appendChild(document.createTextNode(text));
+    messages.appendChild(p);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+
+    if (API_URL === "PASTE_YOUR_BACKEND_URL_HERE") {
+      status.textContent = "The AI backend must be connected in Step 2.";
+      return;
+    }
+
+    addMessage("You", question);
+    input.value = "";
+    send.disabled = true;
+    status.textContent = "AI is thinking...";
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question })
+      });
+
+      if (!response.ok) throw new Error("Request failed");
+      const data = await response.json();
+
+      if (typeof data.answer !== "string") {
+        throw new Error("Invalid response");
+      }
+
+      addMessage("AI Tutor", data.answer);
+      status.textContent = "Answer received.";
+    } catch (error) {
+      status.textContent = "Couldn't connect. Please try again later.";
+    } finally {
+      send.disabled = false;
+    }
+  });
+
+  document.getElementById("ai-speak").addEventListener("click", () => {
+    if (!("speechSynthesis" in window)) {
+      status.textContent = "Speech is not supported in this browser.";
+      return;
+    }
+    const last = messages.lastElementChild;
+    if (!last) return;
+    const speech = new SpeechSynthesisUtterance(last.textContent);
+    speech.lang = /[\u0900-\u097F]/.test(last.textContent)
+      ? "hi-IN" : "en-IN";
+    speechSynthesis.cancel();
+    speechSynthesis.speak(speech);
+  });
+})();
+</script>
+</body>
