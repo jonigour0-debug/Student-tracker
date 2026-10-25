@@ -1,0 +1,83 @@
+
+export default {
+  async fetch(request, env) {
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "https://jonigour0-debug.github.io",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
+    };
+
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    const json = (data, status = 200) =>
+      new Response(JSON.stringify(data), {
+        status,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+
+    if (request.method !== "POST") {
+      return json({ error: "Use POST to ask a question." }, 405);
+    }
+
+    if (!env.OPENAI_API_KEY) {
+      return json({ error: "AI key is not configured." }, 500);
+    }
+
+    try {
+      const body = await request.json();
+      const question = body.question;
+
+      if (typeof question !== "string" ||
+          !question.trim() || question.length > 2000) {
+        return json({ error: "Enter a question under 2000 characters." }, 400);
+      }
+
+      const result = await fetch(
+        "https://api.openai.com/v1/responses",
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "gpt-6",
+            instructions:
+              "You are StudyTrack AI, a friendly school tutor. " +
+              "Help students understand school subjects. Explain " +
+              "problems step by step, use simple language, and reply " +
+              "in Hindi or English according to the student's question.",
+            input: question,
+            max_output_tokens: 700
+          })
+        }
+      );
+
+      const data = await result.json();
+
+      if (!result.ok) {
+        return json({
+          error: "AI provider request failed. Check API access and billing."
+        }, 502);
+      }
+
+      const answer = (data.output || [])
+        .filter(item => item.type === "message")
+        .flatMap(item => item.content || [])
+        .filter(item => item.type === "output_text")
+        .map(item => item.text)
+        .join("\n");
+
+      return json({
+        answer: answer || "Sorry, I couldn't generate an answer. Try again."
+      });
+    } catch (error) {
+      return json({ error: "Invalid request or server error." }, 400);
+    }
+  }
+};
