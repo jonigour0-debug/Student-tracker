@@ -383,3 +383,179 @@ setInterval(checkReminders,15000);
 })();
 </script>
 </body>
+<!-- StudyTrack Study Timer -->
+<section id="study-tracker" style="max-width:600px;margin:24px auto;padding:20px;border-radius:18px;background:#111827;color:white;font-family:Arial,sans-serif">
+  <h2>📚 StudyTrack Timer</h2>
+  <p>Track your focused study time.</p>
+
+  <label for="st-subject">Choose subject</label>
+  <select id="st-subject" style="width:100%;padding:12px;margin:8px 0;border-radius:8px">
+    <option>Physics</option>
+    <option>Chemistry</option>
+    <option>Mathematics</option>
+    <option>Biology</option>
+    <option>English</option>
+    <option>Hindi</option>
+    <option>Other</option>
+  </select>
+
+  <div id="st-clock" style="font-size:42px;text-align:center;font-weight:bold;padding:22px 0">00:00:00</div>
+
+  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button id="st-start" style="padding:12px 18px;background:#22c55e;border:0;border-radius:8px">▶ Start</button>
+    <button id="st-pause" style="padding:12px 18px;background:#facc15;border:0;border-radius:8px">⏸ Pause</button>
+    <button id="st-reset" style="padding:12px 18px;background:#f87171;border:0;border-radius:8px">↺ Reset</button>
+  </div>
+
+  <hr style="margin:20px 0;opacity:.3">
+  <h3>Today's study time</h3>
+  <p id="st-today">0 min</p>
+  <h3>Subject breakdown</h3>
+  <div id="st-subjects">No study sessions yet.</div>
+  <p style="font-size:12px;color:#cbd5e1">
+    Time is saved on this device. Keep the page open for best results.
+  </p>
+</section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const KEY = "studytrack_timer_v1";
+
+  let data;
+  try {
+    data = JSON.parse(localStorage.getItem(KEY)) || {};
+  } catch {
+    data = {};
+  }
+
+  if (!Array.isArray(data.sessions)) data.sessions = [];
+  if (!data.active || typeof data.active !== "object") {
+    data.active = null;
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(data));
+    } catch {
+      $("st-today").textContent = "Storage unavailable";
+    }
+  }
+
+  function dayKey(ms) {
+    const d = new Date(ms);
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+  }
+
+  function elapsed() {
+    if (!data.active) return 0;
+    return Math.max(0, Date.now() - data.active.startedAt);
+  }
+
+  function fmt(ms) {
+    const s = Math.floor(ms / 1000);
+    return [Math.floor(s / 3600),
+      Math.floor((s % 3600) / 60), s % 60]
+      .map(n => String(n).padStart(2, "0")).join(":");
+  }
+
+  function finishSession() {
+    if (!data.active) return;
+    const now = Date.now();
+    const start = data.active.startedAt;
+    if (now > start) {
+      data.sessions.push({
+        subject: data.active.subject,
+        start,
+        end: now
+      });
+    }
+    data.active = null;
+    save();
+    render();
+  }
+
+  function render() {
+    const today = dayKey(Date.now());
+    let total = 0;
+    const subjects = {};
+
+    for (const session of data.sessions) {
+      // Split sessions across midnight for accurate daily totals.
+      let t = session.start;
+      while (t < session.end) {
+        const midnight = new Date(t);
+        midnight.setHours(24, 0, 0, 0);
+        const end = Math.min(session.end, midnight.getTime());
+        const duration = end - t;
+        if (dayKey(t) === today) {
+          total += duration;
+          subjects[session.subject] =
+            (subjects[session.subject] || 0) + duration;
+        }
+        t = end;
+      }
+    }
+
+    if (data.active) {
+      const duration = elapsed();
+      total += duration;
+      subjects[data.active.subject] =
+        (subjects[data.active.subject] || 0) + duration;
+      $("st-clock").textContent = fmt(duration);
+    } else {
+      $("st-clock").textContent = "00:00:00";
+    }
+
+    $("st-today").textContent =
+      (total / 60000).toFixed(1) + " minutes";
+
+    $("st-subjects").replaceChildren();
+    for (const [name, ms] of Object.entries(subjects)) {
+      const p = document.createElement("p");
+      p.textContent = name + ": " + (ms / 60000).toFixed(1) + " min";
+      $("st-subjects").appendChild(p);
+    }
+    if (!Object.keys(subjects).length) {
+      $("st-subjects").textContent = "No study sessions yet.";
+    }
+
+    $("st-start").disabled = !!data.active;
+    $("st-pause").disabled = !data.active;
+  }
+
+  $("st-start").addEventListener("click", () => {
+    if (data.active) return;
+    data.active = {
+      subject: $("st-subject").value,
+      startedAt: Date.now()
+    };
+    save();
+    render();
+  });
+
+  $("st-pause").addEventListener("click", finishSession);
+
+  $("st-reset").addEventListener("click", () => {
+    if (!confirm("Reset the current timer? Saved study sessions will remain.")) return;
+    data.active = null;
+    save();
+    render();
+  });
+
+  // Refresh when returning to the page.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) render();
+  });
+  window.addEventListener("pageshow", render);
+
+  // Refresh the displayed clock while the page is visible.
+  setInterval(() => {
+    if (!document.hidden) render();
+  }, 1000);
+
+  render();
+})();
+</script>
